@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>html,body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<title>출석 룰렛 이벤트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
+<style>
+/* Layout: 모바일 한 컬럼(최대 520px). 제목 → 검은 눈금 룰렛 → 참여 입력 → 결과 → 참여 방법·유의사항. 흑백 바탕에 연한 민트는 당첨 눈금과 당첨 표시에만 쓴다. 각진 모서리와 가는 선. 단독 라이트 화면으로 설계. */
+:root {
+  --bg: #eceeeb;
+  --paper: #ffffff;
+  --ink: #0b0b0b;
+  --muted: #5a5e5a;
+  --line: #c8ccc7;
+  --soft: #dfeee6;
+  --off: #d9dcd8;
+  --off-ink: #8a8e8a;
+  --mint: #a8d4bd;
+  --font-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-label: "Archivo", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --dur: 5.2s;
+  color-scheme: light;
+}
+@media (prefers-reduced-motion: reduce) { :root { --dur: .8s; } }
+[hidden] { display: none !important; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-inline: 16px;
+  padding-block: 30px 60px;
+}
+.wrap { max-width: 520px; margin-inline: auto; display: flex; flex-direction: column; gap: 28px; }
+.wrap > * { min-width: 0; }
+
+header { display: flex; flex-direction: column; gap: 10px; }
+.eyebrow { display: flex; align-items: center; gap: 12px; font-family: var(--font-label); font-weight: 600; font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: var(--muted); }
+.eyebrow::before { content: ""; width: 28px; height: 1px; background: var(--ink); flex: none; }
+.testtag { color: var(--ink); border: 1px solid var(--ink); padding: 0 6px; letter-spacing: .08em; }
+h1 { margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; text-wrap: balance; }
+.lead { margin: 0; color: var(--muted); }
+.lead b { color: var(--ink); font-weight: 700; }
+
+/* 룰렛 */
+.stage { display: flex; flex-direction: column; gap: 16px; align-items: center; padding-top: 22px; }
+.dial { position: relative; width: min(100%, 420px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, var(--paper) 0 62%, transparent 63%); }
+.wheel { width: 100%; height: 100%; display: block; transition: transform var(--dur) cubic-bezier(.1, .7, .1, 1); will-change: transform; }
+.wheel.no-anim { transition: none; }
+.pointer { position: absolute; top: -22px; left: 50%; transform: translateX(-50%); width: 4px; height: 36px; background: var(--ink); box-shadow: 0 0 0 1px var(--paper); }
+.pointer::before { content: ""; position: absolute; top: -5px; left: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 1px var(--paper); }
+.hub {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 40%; aspect-ratio: 1; border-radius: 50%;
+  background: var(--paper); border: 1px solid var(--ink); display: grid; place-items: center; text-align: center;
+}
+.hub .big { display: block; font-family: var(--font-label); font-weight: 800; font-size: clamp(26px, 8vw, 38px); line-height: 1; letter-spacing: -.02em; }
+.hub .cap { display: block; margin-top: 8px; font-family: var(--font-label); font-weight: 600; font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); padding-left: .3em; }
+.legend { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.legend i { width: 10px; height: 10px; display: block; background: var(--mint); outline: 1px solid var(--ink); }
+
+/* 입력 */
+.panel { background: var(--paper); border: 1px solid var(--ink); padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.field label { display: block; font-family: var(--font-label); font-weight: 600; font-size: 11px; color: var(--muted); letter-spacing: .2em; text-transform: uppercase; margin-bottom: 6px; }
+.field input[type="text"] {
+  width: 100%; font: inherit; font-size: 17px; color: var(--ink); background: var(--paper); border: 0; border-bottom: 1px solid var(--ink);
+  border-radius: 0; padding: 8px 0 10px; outline: none; min-width: 0;
+}
+.field input[type="text"]:focus { border-bottom-width: 3px; padding-bottom: 8px; }
+.field input[type="text"]:disabled { color: var(--muted); }
+.check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; line-height: 1.45; }
+.check input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--ink); flex: none; }
+.go {
+  font: inherit; font-size: 16px; font-weight: 700; letter-spacing: .12em; color: #fff; background: var(--ink); border: 1px solid var(--ink); border-radius: 0;
+  padding: 16px 16px; cursor: pointer; width: 100%;
+}
+.go:disabled { background: var(--off); border-color: var(--off); color: var(--off-ink); cursor: not-allowed; }
+.go:not(:disabled):hover { background: #26302b; }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+/* 결과 */
+.res { padding: 22px 20px; display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--ink); background: var(--paper); }
+.res.win { background: var(--ink); color: #fff; }
+.res .badge { align-self: flex-start; font-family: var(--font-label); font-weight: 800; font-size: 11px; letter-spacing: .22em; padding: 3px 10px; background: var(--ink); color: #fff; }
+.res.win .badge { background: var(--mint); color: var(--ink); }
+.res h2 { margin: 0; font-size: 22px; font-weight: 900; line-height: 1.3; text-wrap: balance; }
+.res p { margin: 0; color: var(--muted); }
+.res.win p { color: #c3c8c3; }
+.meta { margin: 0; display: grid; gap: 8px; }
+.meta div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #3a3d3a; padding-bottom: 8px; }
+.meta dt { color: #a6aba6; font-size: 13px; flex: none; }
+.meta dd { margin: 0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.mono { font-family: var(--font-mono); letter-spacing: .04em; }
+
+/* 안내 */
+.rules h2 { margin: 0 0 12px; font-family: var(--font-label); font-weight: 600; font-size: 12px; letter-spacing: .24em; text-transform: uppercase; }
+.rules h2 span { font-family: var(--font-body); letter-spacing: 0; text-transform: none; font-size: 16px; font-weight: 700; }
+.rules section + section { margin-top: 26px; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; counter-reset: s; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 14px; }
+.steps li::before { content: counter(s); font-family: var(--font-label); font-weight: 600; font-size: 13px; width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--ink); grid-row: 1 / span 2; }
+.steps b { font-weight: 700; }
+.steps span { color: var(--muted); font-size: 14px; }
+.rules ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+.rules .must { margin: 14px 0 0; padding: 12px 14px; background: var(--soft); font-size: 14px; }
+.risk { font-size: 12px; color: var(--muted); line-height: 1.6; border-top: 1px solid var(--line); padding-top: 16px; }
+
+/* 당첨 축하 */
+.celebrate { position: fixed; inset: 0; z-index: 20; background: rgba(11, 11, 11, .92); display: grid; place-items: center; padding: 24px; overflow: hidden; }
+.celebrate canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cel-box { position: relative; text-align: center; color: #fff; display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 420px; animation: pop .55s cubic-bezier(.2, 1.4, .4, 1) both; }
+.cel-eyebrow { font-family: var(--font-label); font-weight: 600; font-size: 12px; letter-spacing: .34em; padding-left: .34em; color: var(--mint); }
+.cel-box h2 { margin: 0; font-size: clamp(76px, 26vw, 128px); font-weight: 900; line-height: 1; letter-spacing: -.04em; }
+.cel-name { margin: 0; font-size: 18px; color: #d5dad5; overflow-wrap: anywhere; }
+.cel-prize { margin: 6px 0 0; padding: 10px 20px; background: var(--mint); color: var(--ink); font-weight: 900; font-size: 22px; }
+.cel-sub { margin: 8px 0 0; font-size: 14px; color: #b4b9b4; }
+.cel-btn { margin-top: 14px; font: inherit; font-weight: 700; letter-spacing: .2em; padding: 14px 44px; background: #fff; color: var(--ink); border: 0; border-radius: 0; cursor: pointer; }
+.cel-btn:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
+@keyframes pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .cel-box { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow"><span id="cafeName"></span><span class="testtag" id="testTag" hidden>테스트 모드</span></div>
+    <h1>출석 룰렛 이벤트</h1>
+    <p class="lead">출석 댓글을 남기고 룰렛을 돌려보세요. 당첨되면 <b data-cfg="prize"></b>을 드립니다.</p>
+  </header>
+
+  <section class="stage" aria-label="룰렛">
+    <div class="dial">
+      <svg class="wheel" id="wheel" viewBox="-112 -112 224 224" role="img" aria-label="100달러 크레딧 당첨 칸이 있는 룰렛"></svg>
+      <div class="pointer" aria-hidden="true"></div>
+      <div class="hub"><div><span class="big">$100</span><span class="cap">Credit</span></div></div>
+    </div>
+    <div class="legend" aria-hidden="true"><i></i><span data-cfg="prize"></span> 칸</div>
+  </section>
+
+  <section class="panel" aria-label="참여하기">
+    <div class="field">
+      <label for="nick">카페 닉네임</label>
+      <input id="nick" type="text" maxlength="20" autocomplete="off" placeholder="출석 댓글에 쓴 닉네임">
+    </div>
+    <label class="check" for="agree"><input type="checkbox" id="agree"><span>오늘 출석 게시글에 출석 댓글을 작성했습니다</span></label>
+    <button type="button" class="go" id="go" disabled>룰렛 돌리기</button>
+    <p class="hint" id="hint">닉네임을 입력하고 출석 댓글 작성에 체크하면 돌릴 수 있어요.</p>
+  </section>
+
+  <div id="result" aria-live="polite"></div>
+
+  <div class="rules">
+    <section>
+      <h2><span>참여 방법</span></h2>
+      <ol class="steps">
+        <li><b>출석 댓글 작성</b><span>이벤트 출석 게시글에 오늘 출석 댓글을 남깁니다.</span></li>
+        <li><b>룰렛 참여</b><span>이 페이지에서 닉네임을 입력하고 룰렛을 돌립니다.</span></li>
+        <li><b>당첨 확인</b><span>당첨되면 화면을 캡처해 댓글로 남깁니다. 운영진 확인 후 <span data-cfg="prize"></span>이 지급됩니다.</span></li>
+      </ol>
+      <p class="must">출석 댓글을 작성한 뒤 룰렛에 참여해야 참여로 인정됩니다.</p>
+    </section>
+    <section>
+      <h2><span>유의사항</span></h2>
+      <ul>
+        <li>출석 1회당 룰렛 1회, 하루에 한 번 참여할 수 있습니다.</li>
+        <li>당첨 여부는 매 회 무작위로 정해지며, 이전 결과나 참여 횟수와 관계없습니다.</li>
+        <li>출석 댓글이 확인되지 않거나 부정한 방법으로 참여한 경우 당첨이 취소될 수 있습니다.</li>
+        <li>크레딧 지급 시기와 방법은 운영진 공지에 따릅니다.</li>
+      </ul>
+    </section>
+    <p class="risk">해외선물 거래는 원금 손실이 발생할 수 있는 고위험 상품입니다. 이 이벤트는 투자 권유가 아니며, 거래 여부는 본인의 판단과 책임으로 결정해야 합니다.</p>
+  </div>
+</div>
+
+<div class="celebrate" id="celebrate" role="dialog" aria-modal="true" aria-labelledby="celTitle" hidden>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+  <div class="cel-box">
+    <div class="cel-eyebrow" id="celEyebrow">CONGRATULATIONS</div>
+    <h2 id="celTitle">당첨!</h2>
+    <p class="cel-name" id="celName"></p>
+    <p class="cel-prize" data-cfg="prize"></p>
+    <p class="cel-sub" id="celSub"></p>
+    <button type="button" class="cel-btn" id="celClose">확인</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  /* ───── 운영진이 바꾸는 설정 ───── */
+  var CONFIG = {
+    cafeName: "카페 출석 이벤트",   // 화면 맨 위 작은 글씨 (카페 이름으로 바꿔 쓰세요)
+    prizeText: "100$ 크레딧",
+    winRate: 0.01,                  // 당첨 확률 (운영진만 아는 값). 화면에는 표시되지 않습니다.
+                                    // 매 회 독립적으로 적용되며 이월·누적되지 않습니다.
+                                    // 당첨자가 나오지 않아도 다음 날 확률이 올라가지 않고 같은 값으로 시작합니다.
+    dailyLimit: true,               // 같은 브라우저에서 하루 1회 (한국 시간 0시에 새로 시작)
+    claimText: "이 화면을 캡처해 이벤트 게시글에 댓글로 남겨 주세요. 운영진이 출석 댓글을 확인한 뒤 지급합니다."
+  };
+  var TICKS = 100;                  // 룰렛 눈금 수 (그림 전용)
+  var STORE_KEY = "cafeRouletteV1";
+  var SL = 360 / TICKS;
+  var TEST = location.hash === "#test" || location.hash === "#testwin";   // 운영진 확인용: 저장 없이 여러 번 가능
+  var FORCE_WIN = location.hash === "#testwin";                            // 당첨 화면 미리보기 (지급 대상 아님)
+  var LIMITED = CONFIG.dailyLimit && !TEST;
+
+  /* 당첨 눈금: 확률에 맞춰 최소 1칸, 고르게 배치 / 나머지는 꽝 눈금 */
+  var goldCount = Math.max(1, Math.round(CONFIG.winRate * TICKS));
+  var GOLD = [], LOSE = [], g, i;
+  for (g = 0; g < goldCount; g++) GOLD.push(Math.floor(g * TICKS / goldCount));
+  for (i = 0; i < TICKS; i++) if (GOLD.indexOf(i) < 0) LOSE.push(i);
+
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  /* 설정값 채우기 */
+  $("cafeName").textContent = CONFIG.cafeName;
+  $("testTag").hidden = !TEST;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cfg]"), function (n) { n.textContent = CONFIG.prizeText; });
+
+  /* ───── 룰렛 그리기 ───── */
+  var NS = "http://www.w3.org/2000/svg";
+  function pt(r, a) { var t = a * Math.PI / 180; return (r * Math.sin(t)).toFixed(3) + " " + (-r * Math.cos(t)).toFixed(3); }
+  function wedge(n, r0, r1) {
+    var a0 = n * SL, a1 = (n + 1) * SL;
+    return "M" + pt(r0, a0) + "L" + pt(r1, a0) + "A" + r1 + " " + r1 + " 0 0 1 " + pt(r1, a1) + "L" + pt(r0, a1) + "A" + r0 + " " + r0 + " 0 0 0 " + pt(r0, a0) + "Z";
+  }
+  var wheel = $("wheel"), p, isGold;
+  for (i = 0; i < TICKS; i++) {
+    isGold = GOLD.indexOf(i) >= 0;
+    p = document.createElementNS(NS, "path");
+    p.setAttribute("d", isGold ? wedge(i, 50, 110) : wedge(i, 58, 100));
+    p.setAttribute("fill", isGold ? "#a8d4bd" : (i % 10 === 0 ? "#555a55" : (i % 2 ? "#1a1c1a" : "#0b0b0b")));
+    p.setAttribute("stroke", "#eceeeb");
+    p.setAttribute("stroke-width", "0.35");
+    wheel.appendChild(p);
+  }
+
+  /* ───── 난수, 날짜 ───── */
+  function randInt(n) {
+    var c = window.crypto || window.msCrypto;
+    if (!c || !c.getRandomValues) return Math.floor(Math.random() * n);
+    var max = Math.floor(4294967296 / n) * n, a = new Uint32Array(1), x;
+    do { c.getRandomValues(a); x = a[0]; } while (x >= max);
+    return x % n;
+  }
+  function kst(d) {
+    var parts = {};
+    new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })
+      .formatToParts(d).forEach(function (x) { parts[x.type] = x.value; });
+    if (parts.hour === "24") parts.hour = "00";
+    return parts;
+  }
+  function dayKey(d) { var k = kst(d); return k.year + "-" + k.month + "-" + k.day; }
+  function timeText(ts) { var k = kst(new Date(ts)); return (k.month * 1) + "월 " + (k.day * 1) + "일 " + k.hour + ":" + k.minute; }
+  function makeCode(d, test) {
+    var k = kst(d), s = "", abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", j;
+    for (j = 0; j < 5; j++) s += abc.charAt(randInt(abc.length));
+    return (test ? "TEST-" : "WIN-") + k.year.slice(2) + k.month + k.day + "-" + s;
+  }
+
+  /* ───── 저장(같은 브라우저 하루 1회) ───── */
+  function load() { try { var v = localStorage.getItem(STORE_KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+  function save(rec) { try { localStorage.setItem(STORE_KEY, JSON.stringify(rec)); } catch (e) { /* 저장이 막혀도 룰렛은 동작 */ } }
+
+  /* ───── 결과 표시 ───── */
+  function showResult(rec) {
+    var box = $("result"), card, dl;
+    box.textContent = "";
+    function row(dt, dd, mono) { var r = el("div"); r.appendChild(el("dt", null, dt)); r.appendChild(el("dd", mono ? "mono" : null, dd)); dl.appendChild(r); }
+    if (rec.win) {
+      card = el("div", "res win");
+      card.appendChild(el("div", "badge", rec.test ? "TEST WIN" : "WIN"));
+      card.appendChild(el("h2", null, "축하합니다! " + CONFIG.prizeText + " 당첨"));
+      dl = el("dl", "meta");
+      row("닉네임", rec.nick); row("당첨 시각", timeText(rec.ts)); row("당첨 코드", rec.code, true);
+      card.appendChild(dl);
+      if (rec.test) card.appendChild(el("p", null, "테스트 모드 결과입니다. 지급 대상이 아닙니다."));
+      else card.appendChild(el("p", null, CONFIG.claimText));
+    } else {
+      card = el("div", "res lose");
+      card.appendChild(el("div", "badge", "NEXT TIME"));
+      card.appendChild(el("h2", null, "아쉽게 꽝입니다"));
+      card.appendChild(el("p", null, LIMITED ? "오늘 참여는 끝났어요. 내일 출석 댓글을 작성하고 다시 도전해 주세요." : "다시 돌려볼 수 있어요. (테스트 모드)"));
+    }
+    box.appendChild(card);
+  }
+
+  /* ───── 회전 ───── */
+  var rot = 0;
+  function rotateTo(k, animate) {
+    var offset = (Math.random() - 0.5) * SL * 0.7;           // 눈금 안에서 살짝 흔들리게
+    var need = (360 - ((k + 0.5) * SL + offset)) % 360;
+    var cur = ((rot % 360) + 360) % 360;
+    var delta = ((need - cur) + 360) % 360 + (animate ? 360 * 6 : 0);
+    rot += delta;
+    wheel.classList.toggle("no-anim", !animate);
+    wheel.style.transform = "rotate(" + rot + "deg)";
+  }
+
+  /* ───── 당첨 축하 화면 ───── */
+  var cel = $("celebrate"), cv = $("confetti"), raf = 0;
+  var reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  function stopConfetti() {
+    if (raf && window.cancelAnimationFrame) window.cancelAnimationFrame(raf);
+    raf = 0;
+    var c = cv.getContext && cv.getContext("2d");
+    if (c) c.clearRect(0, 0, cv.width, cv.height);
+  }
+  function startConfetti() {
+    var c = cv.getContext && cv.getContext("2d");
+    if (!c || reduce || !window.requestAnimationFrame) return;
+    var dpr = window.devicePixelRatio || 1, w = window.innerWidth, h = window.innerHeight, n, pieces = [], colors = ["#a8d4bd", "#ffffff", "#ffffff", "#8a8e8a", "#dfeee6"];
+    cv.width = w * dpr; cv.height = h * dpr; c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (n = 0; n < 150; n++) {
+      pieces.push({ x: Math.random() * w, y: -20 - Math.random() * h * 0.7, w: 5 + Math.random() * 7, h: 9 + Math.random() * 10,
+        vx: (Math.random() - 0.5) * 2.2, vy: 2 + Math.random() * 4, r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.3, c: colors[n % colors.length] });
+    }
+    var t0 = Date.now();
+    (function frame() {
+      var alive = 0;
+      c.clearRect(0, 0, w, h);
+      pieces.forEach(function (q) {
+        q.x += q.vx; q.y += q.vy; q.r += q.vr;
+        if (q.y < h + 30) alive++;
+        c.save(); c.translate(q.x, q.y); c.rotate(q.r); c.fillStyle = q.c; c.fillRect(-q.w / 2, -q.h / 2, q.w, q.h); c.restore();
+      });
+      if (alive && Date.now() - t0 < 7000) raf = window.requestAnimationFrame(frame); else stopConfetti();
+    })();
+  }
+  function celebrate(rec) {
+    $("celEyebrow").textContent = rec.test ? "TEST MODE" : "CONGRATULATIONS";
+    $("celName").textContent = rec.nick + "님, 축하합니다!";
+    $("celSub").textContent = rec.test ? "테스트 결과입니다. 지급 대상이 아닙니다." : "확인을 누르고, 아래 당첨 화면을 캡처해 댓글로 남겨 주세요.";
+    cel.hidden = false;
+    startConfetti();
+    if ($("celClose").focus) $("celClose").focus();
+  }
+  function closeCelebrate() {
+    if (cel.hidden) return;
+    cel.hidden = true; stopConfetti();
+    var r = $("result"); if (r.scrollIntoView) r.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+  }
+  $("celClose").addEventListener("click", closeCelebrate);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeCelebrate(); });
+
+  /* ───── 폼 상태 ───── */
+  var nick = $("nick"), agree = $("agree"), go = $("go"), hint = $("hint");
+  var busy = false;
+  function refreshForm() { go.disabled = busy || !(nick.value.trim() && agree.checked); }
+  nick.addEventListener("input", refreshForm);
+  agree.addEventListener("change", refreshForm);
+  nick.addEventListener("keydown", function (e) { if (e.key === "Enter" && !go.disabled) go.click(); });
+
+  function lockForToday(rec) {
+    nick.value = rec.nick; nick.disabled = true; agree.checked = true; agree.disabled = true;
+    go.disabled = true; go.textContent = "오늘은 이미 참여했어요";
+    hint.textContent = "출석 1회당 룰렛 1회예요. 내일 출석 댓글을 쓰고 다시 참여해 주세요.";
+  }
+
+  go.addEventListener("click", function () {
+    var name = nick.value.trim();
+    if (!name || !agree.checked || busy) return;
+    var now = new Date();
+    var win = FORCE_WIN || randInt(1000000) < Math.round(CONFIG.winRate * 1000000);   // 매 회 독립 추첨
+    var k = win ? GOLD[randInt(GOLD.length)] : LOSE[randInt(LOSE.length)];
+    var rec = { day: dayKey(now), ts: now.getTime(), nick: name, k: k, win: win, code: win ? makeCode(now, TEST) : "", test: TEST };
+    if (LIMITED) save(rec);                                   // 돌리기 전에 저장해서 새로고침으로 다시 돌릴 수 없게 함
+    busy = true; go.disabled = true; go.textContent = "돌리는 중…"; $("result").textContent = "";
+    rotateTo(k, true);
+
+    var finished = false;
+    function done() {
+      if (finished) return; finished = true;
+      wheel.removeEventListener("transitionend", onEnd);
+      busy = false; showResult(rec);
+      if (rec.win) celebrate(rec);
+      if (LIMITED) lockForToday(rec);
+      else { go.textContent = "룰렛 돌리기"; refreshForm(); }
+    }
+    function onEnd(e) { if (e.target === wheel) done(); }
+    wheel.addEventListener("transitionend", onEnd);
+    var ms = parseFloat(getComputedStyle(wheel).transitionDuration) * 1000 || 5200;
+    setTimeout(done, ms + 400);
+  });
+
+  /* 오늘 이미 참여한 경우: 결과를 그대로 보여준다 */
+  var prev = LIMITED ? load() : null;
+  if (prev && prev.day === dayKey(new Date())) {
+    rotateTo(prev.k, false);
+    showResult(prev);
+    lockForToday(prev);
+  }
+})();
+</script>
+
+</body>
+</html>
